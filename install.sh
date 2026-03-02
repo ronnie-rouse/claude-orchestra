@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEFAULT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "=== Orchestra Installer ==="
 echo ""
@@ -56,8 +57,8 @@ fi
 
 # 5. Dashboard
 echo ""
-read -rp "Where should the dashboard HTML be copied? [~/Projects/orchestra-dashboard.html]: " DASH_PATH
-DASH_PATH="${DASH_PATH:-$HOME/Projects/orchestra-dashboard.html}"
+read -rp "Where should the dashboard HTML be copied? [$DEFAULT_DIR/orchestra-dashboard.html]: " DASH_PATH
+DASH_PATH="${DASH_PATH:-$DEFAULT_DIR/orchestra-dashboard.html}"
 DASH_DIR="$(dirname "$DASH_PATH")"
 
 if [ -d "$DASH_DIR" ]; then
@@ -73,6 +74,6 @@ echo "=== Installation Complete ==="
 echo ""
 echo "Next steps:"
 echo "  1. Edit $TEAM_DIR/projects.json with your actual projects"
-echo "  2. Copy templates/CLAUDE.md into your workspace root (e.g. ~/Projects/CLAUDE.md)"
+echo "  2. Copy templates/CLAUDE.md into your workspace root (e.g. $DEFAULT_DIR/CLAUDE.md)"
 echo "  3. Open a Claude Code session in your workspace and run: /orchestra"
 echo ""

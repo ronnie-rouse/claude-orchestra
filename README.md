@@ -44,8 +44,8 @@ cp templates/settings.json ~/.claude/teams/orchestra/settings.json
 # Initialize team-lead inbox
 echo '[]' > ~/.claude/teams/orchestra/inboxes/team-lead.json
 
-# Copy dashboard (optional)
-cp orchestra-dashboard.html ~/Projects/orchestra-dashboard.html
+# Copy dashboard to parent directory (optional)
+cp orchestra-dashboard.html ../orchestra-dashboard.html
 ```
 
 ## Configure
@@ -55,8 +55,8 @@ Edit `~/.claude/teams/orchestra/projects.json` to register your projects:
 ```json
 {
   "projects": [
-    { "name": "my-app", "path": "~/Projects/my-app", "description": "Main web application" },
-    { "name": "my-api", "path": "~/Projects/my-api", "description": "Backend API service" }
+    { "name": "my-app", "path": "/path/to/my-app", "description": "Main web application" },
+    { "name": "my-api", "path": "/path/to/my-api", "description": "Backend API service" }
   ]
 }
 ```
