@@ -1,0 +1,7 @@
+{
+  "projects": [
+    { "name": "my-app", "path": "~/Projects/my-app", "description": "Main web application" },
+    { "name": "my-api", "path": "~/Projects/my-api", "description": "Backend API service" },
+    { "name": "my-lib", "path": "~/Projects/my-lib", "description": "Shared library" }
+  ]
+}

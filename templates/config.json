@@ -1,0 +1,12 @@
+{
+  "name": "orchestra",
+  "description": "Multi-project coordination across your workspace",
+  "members": [
+    {
+      "agentId": "team-lead@orchestra",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "cwd": "~/Projects"
+    }
+  ]
+}
