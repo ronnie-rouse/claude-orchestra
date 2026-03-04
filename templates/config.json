@@ -6,7 +6,7 @@
       "agentId": "team-lead@orchestra",
       "name": "team-lead",
       "agentType": "team-lead",
-      "cwd": "~/Projects"
+      "cwd": "/home/user/projects"
     }
   ]
 }

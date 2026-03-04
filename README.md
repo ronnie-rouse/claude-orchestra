@@ -8,7 +8,7 @@ Orchestra is a Claude Code **skill** — a `SKILL.md` file that teaches Claude h
 
 Orchestra runs in two modes:
 
-**Live Mode** — Spawn persistent agents that stay alive and receive work in real time. Each agent bootstraps its project (reads `CLAUDE.md`, checks git status) and waits for tasks. You talk to the team lead; it delegates to agents via `SendMessage`.
+**Live Mode** — Spawn persistent agents that stay alive and receive work in real time. Each agent bootstraps its project (reads `CLAUDE.md`, checks git status, loads project memory from previous sessions) and waits for tasks. You talk to the team lead; it delegates to agents via `SendMessage`.
 
 **Manual Mode** — Lightweight polling via JSON inbox files. Works across sessions since inbox files persist after agents die. Check your inbox, mark tasks done, and the team lead picks up the results next session.
 
