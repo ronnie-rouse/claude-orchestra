@@ -1,6 +1,6 @@
 # Orchestra
 
-Multi-project coordination for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Spawn persistent agents across your projects, assign work via natural language, and track progress through a shared task board and inbox system.
+Multi-project coordination for [Claude Code](https://code.claude.com). Spawn persistent agents across your projects, assign work via natural language, and track progress through a shared task board and inbox system.
 
 Orchestra is a Claude Code **skill** — a `SKILL.md` file that teaches Claude how to coordinate work across multiple independent projects in your workspace.
 
@@ -13,6 +13,8 @@ Orchestra runs in two modes:
 **Manual Mode** — Lightweight polling via JSON inbox files. Works across sessions since inbox files persist after agents die. Check your inbox, mark tasks done, and the team lead picks up the results next session.
 
 Both modes are interoperable — live agents write to the same inbox files that manual mode reads.
+
+**Task management** uses Claude Code's native TaskCreate/TaskUpdate/TaskList/TaskGet tools. Orchestra adds cross-session persistence via inbox files and a visual HTML dashboard.
 
 ## Install
 
@@ -117,11 +119,13 @@ Orchestra includes optional [Claude Code hooks](https://code.claude.com/docs/en/
 | Hook | Event | What It Does |
 |------|-------|-------------|
 | `orchestra-inbox-context.sh` | `SessionStart` | Auto-reads your inbox on session start and injects unread messages and active tasks as context |
+| `orchestra-refresh-dashboard.sh` | `SessionStart`, `PostToolUse` | Auto-refreshes the dashboard HTML when the session starts and after every task change (TaskCreate/TaskUpdate) |
 | `orchestra-task-gate.sh` | `TaskCompleted` | Validates tests pass before allowing a task to be marked as completed |
 | `orchestra-memory-inject.sh` | `SubagentStart` | Auto-injects project memory files as context when subagents spawn |
 | `orchestra-memory-save.sh` | `Stop` | Reminds agents to save learnings to memory after substantive work sessions |
 | `orchestra-idle-tracker.sh` | `TeammateIdle` | Writes status to inbox when agents go idle and notifies the team lead |
 | `orchestra-precompact.sh` | `PreCompact` | Preserves Orchestra state (inbox, tasks, memory, team identity) through context compaction |
+| `orchestra-spawn-cleanup.sh` | (called by `/orchestra spawn`) | Removes stale members from config.json and consolidates numbered inbox variants before agent creation |
 
 ### Enabling Hooks
 
@@ -138,6 +142,24 @@ After installing, add the hook configurations to your `~/.claude/settings.json`.
             "type": "command",
             "command": "$HOME/.claude/hooks/orchestra/orchestra-inbox-context.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/orchestra/orchestra-refresh-dashboard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "TaskUpdate|TaskCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/orchestra/orchestra-refresh-dashboard.sh",
+            "timeout": 10,
+            "async": true
           }
         ]
       }
@@ -157,11 +179,13 @@ After installing, add the hook configurations to your `~/.claude/settings.json`.
 }
 ```
 
-See `templates/hooks.json` for the full configuration with all 6 hooks.
+See `templates/hooks.json` for the full configuration with all 8 hooks.
 
 ### Hook Details
 
 **SessionStart — Inbox Context** reads your Orchestra inbox when a session starts or resumes. If you have unread messages, they appear as context so Claude immediately knows about pending tasks and messages. Also surfaces any active tasks assigned to your project.
+
+**SessionStart + PostToolUse — Dashboard Refresh** automatically regenerates the dashboard HTML when a session starts and after every task mutation (TaskCreate, TaskUpdate). The PostToolUse hook runs asynchronously to avoid slowing down task operations. The dashboard path is read from `~/.claude/teams/orchestra/settings.json` (`dashboardPath` key).
 
 **TaskCompleted — Quality Gate** runs before a task can be marked as completed. For JavaScript projects, it checks that `npm test` passes. For Ruby/Rails projects, it checks `bin/rails test` or `rspec`. Warns about uncommitted git changes. Only applies to Orchestra team tasks.
 
@@ -173,24 +197,47 @@ See `templates/hooks.json` for the full configuration with all 6 hooks.
 
 **PreCompact — Context Preservation** runs before context compaction and outputs a summary of Orchestra state: unread inbox messages, active tasks, project memory highlights, and team identity. This ensures agents don't lose their coordination context when the conversation window is compressed.
 
+**Spawn Cleanup** (not a hook event — called directly by `/orchestra spawn`) removes stale members from config.json and consolidates numbered inbox variants into canonical files. This prevents agent name collisions and inbox fragmentation across sessions.
+
 ## Team Files
 
 | Path | Purpose |
 |------|---------|
 | `~/.claude/teams/orchestra/config.json` | Team config (members list) |
 | `~/.claude/teams/orchestra/projects.json` | Project registry |
-| `~/.claude/teams/orchestra/settings.json` | Storage settings |
+| `~/.claude/teams/orchestra/settings.json` | Storage and dashboard settings |
 | `~/.claude/teams/orchestra/inboxes/*.json` | Per-project message inboxes |
-| `~/.claude/tasks/orchestra/*.json` | Task files (one per task) |
+| `~/.claude/tasks/orchestra/*.json` | Task files (managed by native task tools) |
 | `~/.claude/hooks/orchestra/*.sh` | Hook scripts (optional) |
 
 ## Dashboard
 
-Orchestra includes a static HTML dashboard that visualizes tasks, messages, and team members. Run `/orchestra refresh-dashboard` to update it with current data, then open the HTML file in a browser.
+Orchestra includes a static HTML dashboard that visualizes tasks, messages, and team members.
+
+If the `orchestra-refresh-dashboard.sh` hook is enabled, the dashboard auto-refreshes on every task change and session start. Otherwise, run `/orchestra refresh-dashboard` to update it manually, then open the HTML file in a browser.
+
+The dashboard path is stored in `~/.claude/teams/orchestra/settings.json` under the `dashboardPath` key. The installer sets this automatically.
+
+## Architecture
+
+Orchestra bridges the gap between Claude Code's native agent teams (designed for single-session, single-project parallel work) and multi-session, multi-project coordination.
+
+**What Orchestra adds on top of Claude Code:**
+- **Project registry** — maps project names to paths for automated agent bootstrapping
+- **Cross-session persistence** — inbox JSON files survive after agents die, enabling manual mode
+- **Visual dashboard** — HTML overview of tasks and messages across all projects
+- **Quality hooks** — pre-built scripts for test gates, memory management, context preservation
+- **Spawn automation** — one command to bootstrap agents across all registered projects
+
+**What Orchestra delegates to Claude Code:**
+- **Task management** — uses native TaskCreate/TaskUpdate/TaskList/TaskGet tools
+- **Agent communication** — uses native SendMessage for real-time messaging
+- **Team membership** — uses native config.json for member tracking
+- **Agent lifecycle** — uses native Task tool for spawning, idle/shutdown for lifecycle
 
 ## Requirements
 
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) with Teams support
+- [Claude Code](https://code.claude.com) with Teams support (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
 - Claude Code skills enabled (the `~/.claude/skills/` directory)
 - `jq` for hook scripts (most systems have it; install via `brew install jq` or `apt install jq`)
 

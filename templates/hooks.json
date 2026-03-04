@@ -8,6 +8,24 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/orchestra/orchestra-inbox-context.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/orchestra/orchestra-refresh-dashboard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "TaskUpdate|TaskCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/orchestra/orchestra-refresh-dashboard.sh",
+            "timeout": 10,
+            "async": true
           }
         ]
       }

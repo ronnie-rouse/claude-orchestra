@@ -78,6 +78,13 @@ DASH_DIR="$(dirname "$DASH_PATH")"
 if [ -d "$DASH_DIR" ]; then
   cp "$SCRIPT_DIR/orchestra-dashboard.html" "$DASH_PATH"
   echo "[OK] Dashboard installed -> $DASH_PATH"
+
+  # Save dashboard path to settings.json for the auto-refresh hook
+  if [ -f "$TEAM_DIR/settings.json" ]; then
+    jq --arg path "$DASH_PATH" '. + {dashboardPath: $path}' "$TEAM_DIR/settings.json" > "$TEAM_DIR/settings.json.tmp" \
+      && mv "$TEAM_DIR/settings.json.tmp" "$TEAM_DIR/settings.json"
+    echo "[OK] Saved dashboard path to settings.json"
+  fi
 else
   echo "[!!] Directory $DASH_DIR does not exist. Skipping dashboard copy."
   echo "     You can manually copy orchestra-dashboard.html later."

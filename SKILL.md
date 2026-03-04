@@ -17,7 +17,7 @@ A global skill for reading and interacting with the Orchestra team coordination 
 
 ## How It Works
 
-Orchestra uses Claude Code's built-in team/task file convention at `~/.claude/teams/orchestra/` and `~/.claude/tasks/orchestra/` as a coordination protocol between independent project sessions.
+Orchestra uses Claude Code's built-in team and task system for coordination between independent project sessions. Tasks are managed through the native TaskCreate/TaskUpdate/TaskList/TaskGet tools. Cross-session persistence is provided by inbox JSON files at `~/.claude/teams/orchestra/inboxes/`.
 
 **Two modes of operation:**
 
@@ -27,7 +27,6 @@ Orchestra uses Claude Code's built-in team/task file convention at `~/.claude/te
 **Team files:**
 - Team config: `~/.claude/teams/orchestra/config.json`
 - Project registry: `~/.claude/teams/orchestra/projects.json`
-- Tasks: `~/.claude/tasks/orchestra/` (one JSON file per task)
 - Inboxes: `~/.claude/teams/orchestra/inboxes/` (one JSON file per project)
 
 **Inbox message format:**
@@ -43,20 +42,6 @@ Orchestra uses Claude Code's built-in team/task file convention at `~/.claude/te
 ]
 ```
 
-**Task file format:**
-```json
-{
-  "id": "1",
-  "subject": "Implement entropy UI redesign",
-  "description": "Redesign the entropy settings UI...",
-  "activeForm": "Implementing entropy UI",
-  "status": "pending",
-  "owner": "fizzy",
-  "blocks": [],
-  "blockedBy": []
-}
-```
-
 ## Instructions
 
 When the user invokes `/orchestra`, follow these steps:
@@ -68,8 +53,7 @@ Derive the project name from the current working directory. For example, if the 
 ### `/orchestra` (default — overview)
 
 1. Read the project's inbox file: `~/.claude/teams/orchestra/inboxes/{project-name}.json`
-2. List all task files in `~/.claude/tasks/orchestra/` using Glob for `~/.claude/tasks/orchestra/*.json`
-3. Read each task file
+2. Use the **TaskList** tool to get all current tasks.
 
 **Then display a summary:**
    - **Inbox**: Count of unread messages, show the most recent 3
@@ -78,8 +62,9 @@ Derive the project name from the current working directory. For example, if the 
 
 ### `/orchestra status`
 
-1. List and read all task files in `~/.claude/tasks/orchestra/`
-2. List and read all inbox files in `~/.claude/teams/orchestra/inboxes/`
+1. Use the **TaskList** tool to get all current tasks.
+2. For each task that needs more detail, use **TaskGet** to read full descriptions.
+3. List and read all inbox files in `~/.claude/teams/orchestra/inboxes/`
 
 **Then display:**
    - **Tasks Board**: All tasks grouped by status (Pending | In Progress | Completed)
@@ -93,9 +78,8 @@ Derive the project name from the current working directory. For example, if the 
 
 ### `/orchestra done <task-id>`
 
-1. Find and read the task file: `~/.claude/tasks/orchestra/{task-id}.json`
-   - If the task ID is not a filename, search task files for matching `id` field
-2. Edit the task file: set `"status": "completed"`
+1. Use **TaskGet** to read the task by ID.
+2. Use **TaskUpdate** to set the task status to `"completed"`.
 3. Write a completion message to the team-lead inbox (`~/.claude/teams/orchestra/inboxes/team-lead.json`):
    ```json
    {
@@ -110,7 +94,7 @@ Derive the project name from the current working directory. For example, if the 
 
 ### `/orchestra refresh-dashboard`
 
-1. Read all task files from `~/.claude/tasks/orchestra/`
+1. Use the **TaskList** tool and **TaskGet** for each task to collect all task data.
 2. Read all inbox files from `~/.claude/teams/orchestra/inboxes/`
 3. Read the team config from `~/.claude/teams/orchestra/config.json`
 4. Read the dashboard template (the `orchestra-dashboard.html` file — configure its path in your workspace)
@@ -122,27 +106,34 @@ Derive the project name from the current working directory. For example, if the 
 6. Write the updated HTML back to the dashboard file
 7. Tell the user: "Dashboard refreshed. Open orchestra-dashboard.html in a browser."
 
+**Note:** If the `orchestra-refresh-dashboard.sh` hook is enabled, the dashboard auto-refreshes on every task change and session start. Manual refresh is only needed if hooks are not installed.
+
 ### `/orchestra spawn [project...]`
 
 Spawns persistent project agents that join the "orchestra" team and stay alive to receive work.
 
 1. Read the project registry: `~/.claude/teams/orchestra/projects.json`
 2. If specific project names are given (e.g., `/orchestra spawn fizzy prism`), filter the list to only those projects. If no names given, spawn all projects in the registry.
-3. **Clean up stale members (CRITICAL):** Before spawning, read `~/.claude/teams/orchestra/config.json` and remove ALL members whose `name` starts with the project name (e.g., for project `fizzy`, remove `fizzy`, `fizzy-2`, `fizzy-3`, etc.). Write the cleaned config back. This prevents the Task tool from auto-suffixing the agent name (e.g., `fizzy-4`) due to name collisions with dead agents, which would break SendMessage routing.
-4. **Consolidate inbox files:** For each project being spawned, check for any numbered inbox variants (e.g., `my-project-2.json`, `my-project-3.json`). If found, merge their messages into the canonical inbox file (`my-project.json`) and delete the numbered variants. This prevents inbox fragmentation across agent incarnations.
-5. **Derive memoryPath for each project:** Take the project's `path` from the registry, replace all `/` and `_` characters with `-`, then prepend `~/.claude/projects/` and append `/memory/`. This follows the Claude Code auto-memory directory convention. Example: `/home/user/projects/my-app` becomes `~/.claude/projects/-home-user-projects-my-app/memory/`. Pass `{memoryPath}` into the agent prompt template.
-6. For each project, use the **Task tool** with these parameters:
+3. **Run pre-spawn cleanup:** Execute `~/.claude/hooks/orchestra/orchestra-spawn-cleanup.sh` with the project names as arguments (or `all` if spawning all). This removes stale members from config.json and consolidates numbered inbox variants. Example:
+   ```
+   Bash: ~/.claude/hooks/orchestra/orchestra-spawn-cleanup.sh fizzy prism
+   ```
+   If the cleanup script doesn't exist, perform the cleanup manually:
+   - Read `~/.claude/teams/orchestra/config.json` and remove ALL members whose `name` matches any project being spawned (including suffixed variants like `fizzy-2`, `fizzy-3`). Write the cleaned config back.
+   - For each project, check for numbered inbox variants (e.g., `my-project-2.json`). If found, merge into the canonical file and delete variants.
+4. **Derive memoryPath for each project:** Take the project's `path` from the registry, replace all `/` and `_` characters with `-`, then prepend `~/.claude/projects/` and append `/memory/`. This follows the Claude Code auto-memory directory convention. Example: `/path/to/my-app` becomes `~/.claude/projects/-path-to-my-app/memory/`. Pass `{memoryPath}` into the agent prompt template.
+5. For each project, use the **Task tool** with these parameters:
    - `team_name`: `"orchestra"`
    - `name`: `"{project-name}"` (e.g., `"fizzy"` — must match the project name exactly)
    - `subagent_type`: `"general-purpose"`
    - `run_in_background`: `false`
    - `description`: `"Spawn {project-name} agent"`
-   - `prompt`: Use the agent prompt template below, substituting `{name}`, `{path}`, `{description}`, and `{memoryPath}` from the project registry entry and step 5.
+   - `prompt`: Use the agent prompt template below, substituting `{name}`, `{path}`, `{description}`, and `{memoryPath}` from the project registry entry and step 4.
 
-7. **Spawn agents in parallel** — make all Task calls in a single message for speed.
-8. Wait for each agent to complete its bootstrap. They will send a "Ready" message via SendMessage.
-9. **Verify names:** After spawn, read `config.json` and confirm each new agent's `name` matches the project name exactly (no suffix). If a suffix was added, warn the user that messaging may not route correctly.
-10. Report to the user which agents are alive and ready.
+6. **Spawn agents in parallel** — make all Task calls in a single message for speed.
+7. Wait for each agent to complete its bootstrap. They will send a "Ready" message via SendMessage.
+8. **Verify names:** After spawn, read `config.json` and confirm each new agent's `name` matches the project name exactly (no suffix). If a suffix was added, warn the user that messaging may not route correctly.
+9. Report to the user which agents are alive and ready.
 
 **Agent prompt template:**
 
@@ -216,12 +207,13 @@ Shows registered team members.
 
 ## Important Notes
 
-- Manual mode commands (`/orchestra`, `status`, `inbox`, `done`, `refresh-dashboard`) use only the Read, Edit, Write, and Glob tools — no Bash, no API calls.
-- Live mode commands (`spawn`, `shutdown`, `who`) use Task, SendMessage, and Read tools.
-- Inbox files are JSON arrays. When appending a message, read the current array, push the new message, and write the full array back.
-- Task files use the same schema as Claude Code's built-in TaskCreate convention.
-- If any file doesn't exist yet, report it gracefully (e.g., "No inbox found — the orchestra team may not be initialized yet. Run TeamCreate from the parent session.")
+- **Tasks use native tools.** Use TaskCreate/TaskUpdate/TaskList/TaskGet for all task operations. Do not read or write task JSON files directly.
+- **Inboxes use JSON files.** Inbox files are the cross-session persistence layer. When appending a message, read the current array, push the new message, and write the full array back.
+- Manual mode commands (`/orchestra`, `status`, `inbox`, `done`, `refresh-dashboard`) use the native task tools plus Read/Edit/Write for inbox files.
+- Live mode commands (`spawn`, `shutdown`, `who`) use Task, SendMessage, Bash (for cleanup script), and Read tools.
+- If any file doesn't exist yet, report it gracefully (e.g., "No inbox found — the orchestra team may not be initialized yet. Run the installer.")
 - Agents spawned with `/orchestra spawn` will appear in `config.json` members. They go idle between turns (zero cost) and wake on `SendMessage`.
 - The `/orchestra` manual mode can always pick up where live agents left off — inbox files persist across sessions.
-- **Agent naming is critical for SendMessage routing.** The agent's `name` in `config.json` MUST match the project name exactly (e.g., `"fizzy"`, not `"fizzy-2"`). The spawn cleanup step ensures this. When sending messages to agents, always use the canonical project name as the recipient.
-- **One inbox per project.** Each project uses a single canonical inbox file (e.g., `my-project.json`). Never create numbered variants like `my-project-2.json`. The spawn step consolidates any stale numbered variants into the canonical file.
+- **Agent naming is critical for SendMessage routing.** The agent's `name` in `config.json` MUST match the project name exactly (e.g., `"fizzy"`, not `"fizzy-2"`). The pre-spawn cleanup ensures this. When sending messages to agents, always use the canonical project name as the recipient.
+- **One inbox per project.** Each project uses a single canonical inbox file (e.g., `my-project.json`). Never create numbered variants like `my-project-2.json`. The spawn cleanup script consolidates any stale numbered variants into the canonical file.
+- **Dashboard auto-refresh.** If the `orchestra-refresh-dashboard.sh` hook is enabled (via PostToolUse and SessionStart hooks), the dashboard updates automatically on every task change. The `/orchestra refresh-dashboard` command is a manual fallback.
