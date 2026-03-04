@@ -47,7 +47,21 @@ else
   echo "[--] settings.json already exists, skipping"
 fi
 
-# 4. Initialize team-lead inbox
+# 4. Install hook scripts
+HOOKS_DIR="$HOME/.claude/hooks/orchestra"
+mkdir -p "$HOOKS_DIR"
+for hook_script in "$SCRIPT_DIR/hooks/"*.sh; do
+  [ -f "$hook_script" ] || continue
+  cp "$hook_script" "$HOOKS_DIR/"
+  chmod +x "$HOOKS_DIR/$(basename "$hook_script")"
+done
+echo "[OK] Installed hook scripts -> $HOOKS_DIR/"
+echo ""
+echo "     To enable hooks, merge templates/hooks.json into your"
+echo "     ~/.claude/settings.json (see README for details)."
+echo ""
+
+# 5. Initialize team-lead inbox
 if [ ! -f "$INBOX_DIR/team-lead.json" ]; then
   echo "[]" > "$INBOX_DIR/team-lead.json"
   echo "[OK] Initialized team-lead inbox"
@@ -55,7 +69,7 @@ else
   echo "[--] team-lead.json already exists, skipping"
 fi
 
-# 5. Dashboard
+# 6. Dashboard
 echo ""
 read -rp "Where should the dashboard HTML be copied? [$DEFAULT_DIR/orchestra-dashboard.html]: " DASH_PATH
 DASH_PATH="${DASH_PATH:-$DEFAULT_DIR/orchestra-dashboard.html}"
