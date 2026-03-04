@@ -130,18 +130,19 @@ Spawns persistent project agents that join the "orchestra" team and stay alive t
 2. If specific project names are given (e.g., `/orchestra spawn fizzy prism`), filter the list to only those projects. If no names given, spawn all projects in the registry.
 3. **Clean up stale members (CRITICAL):** Before spawning, read `~/.claude/teams/orchestra/config.json` and remove ALL members whose `name` starts with the project name (e.g., for project `fizzy`, remove `fizzy`, `fizzy-2`, `fizzy-3`, etc.). Write the cleaned config back. This prevents the Task tool from auto-suffixing the agent name (e.g., `fizzy-4`) due to name collisions with dead agents, which would break SendMessage routing.
 4. **Consolidate inbox files:** For each project being spawned, check for any numbered inbox variants (e.g., `my-project-2.json`, `my-project-3.json`). If found, merge their messages into the canonical inbox file (`my-project.json`) and delete the numbered variants. This prevents inbox fragmentation across agent incarnations.
-5. For each project, use the **Task tool** with these parameters:
+5. **Derive memoryPath for each project:** Take the project's `path` from the registry, replace all `/` and `_` characters with `-`, then prepend `~/.claude/projects/` and append `/memory/`. This follows the Claude Code auto-memory directory convention. Example: `/Users/ronnierouse/Documents/code/insaight-hub` becomes `~/.claude/projects/-Users-ronnierouse-Documents-code-insaight-hub/memory/`. Pass `{memoryPath}` into the agent prompt template.
+6. For each project, use the **Task tool** with these parameters:
    - `team_name`: `"orchestra"`
    - `name`: `"{project-name}"` (e.g., `"fizzy"` — must match the project name exactly)
    - `subagent_type`: `"general-purpose"`
    - `run_in_background`: `false`
    - `description`: `"Spawn {project-name} agent"`
-   - `prompt`: Use the agent prompt template below, substituting `{name}`, `{path}`, and `{description}` from the project registry entry.
+   - `prompt`: Use the agent prompt template below, substituting `{name}`, `{path}`, `{description}`, and `{memoryPath}` from the project registry entry and step 5.
 
-6. **Spawn agents in parallel** — make all Task calls in a single message for speed.
-7. Wait for each agent to complete its bootstrap. They will send a "Ready" message via SendMessage.
-8. **Verify names:** After spawn, read `config.json` and confirm each new agent's `name` matches the project name exactly (no suffix). If a suffix was added, warn the user that messaging may not route correctly.
-9. Report to the user which agents are alive and ready.
+7. **Spawn agents in parallel** — make all Task calls in a single message for speed.
+8. Wait for each agent to complete its bootstrap. They will send a "Ready" message via SendMessage.
+9. **Verify names:** After spawn, read `config.json` and confirm each new agent's `name` matches the project name exactly (no suffix). If a suffix was added, warn the user that messaging may not route correctly.
+10. Report to the user which agents are alive and ready.
 
 **Agent prompt template:**
 
@@ -156,6 +157,17 @@ Description: {description}
 1. Read {path}/CLAUDE.md (and any files it references like @AGENTS.md)
 2. Check for project skills: use Glob to look for {path}/.claude/skills/*/SKILL.md
 3. Run: cd {path} && git status
+4. Read project memory: Read {memoryPath}/MEMORY.md if it exists. If MEMORY.md references other files (e.g., [infrastructure.md](infrastructure.md)), read those too. This gives you context from previous sessions. If the memory directory doesn't exist, skip this step.
+
+== MEMORY ==
+Your project memory directory is: {memoryPath}
+- On bootstrap, you read MEMORY.md for prior session context (done above)
+- During work, if you discover stable patterns, key decisions, or solutions to recurring problems, save them to your memory files using Write/Edit
+- Follow the same conventions as Claude Code auto-memory:
+  - Keep MEMORY.md concise (under 200 lines) as an index
+  - Create separate topic files for detailed notes and link from MEMORY.md
+  - Only save stable, verified patterns — not session-specific state
+  - Update or remove memories that become outdated
 
 == WORKING RULES ==
 - Always use absolute paths or prefix Bash commands with: cd {path} &&
@@ -185,7 +197,7 @@ Sends shutdown requests to all live project agents and cleans up stale members.
 2. Parse the `members` array
 3. For each member whose `name` is NOT `"team-lead"`, send a shutdown request:
    ```
-   SendMessage(type="shutdown_request", recipient="{member-name}", content="Orchestra session ending. Please shut down gracefully.")
+   SendMessage(type="shutdown_request", recipient="{member-name}", content="Orchestra session ending. Before shutting down: if you discovered any important patterns, architectural decisions, debugging insights, or conventions during this session, save them to your project memory files. Then shut down gracefully.")
    ```
 4. **Clean up config:** After shutdown requests are sent, remove all non-team-lead members from the `members` array in `config.json` and write it back. Dead agents from previous sessions should not persist in the config.
 5. Report to the user which agents were sent shutdown requests and that the config was cleaned up.
