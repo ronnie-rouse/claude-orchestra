@@ -101,13 +101,14 @@ ORCHESTRA_DATA=$(jq -n \
 
 # --- Inject into dashboard HTML ---
 # Replace everything between the ORCHESTRA DATA markers
-# Use a temp file to avoid sed in-place portability issues
+# Compact JSON to single line to avoid awk newline issues
 
 TMPFILE=$(mktemp)
 trap 'rm -f "$TMPFILE"' EXIT
 
-# Use awk to replace the block between markers
-awk -v data="$ORCHESTRA_DATA" '
+ORCHESTRA_DATA_COMPACT=$(echo "$ORCHESTRA_DATA" | jq -c '.')
+
+awk -v data="$ORCHESTRA_DATA_COMPACT" '
   /^\/\/ ========== ORCHESTRA DATA/ {
     print $0
     print "const ORCHESTRA_DATA = " data ";"
